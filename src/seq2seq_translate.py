@@ -390,6 +390,7 @@ class Seq2Seq(nn.Cell):
         self.teacher_forcing_ratio = Tensor(teacher_forcing_ratio, mindspore.float32)
         self.dtype = dtype
         self.uniform = ops.UniformReal(seed=0)
+        self.argmax = ops.Argmax(axis=1, output_type=mindspore.int32)
 
     def create_mask(self, src):
         return (src != self.src_pad_idx).swapaxes(0, 1)
@@ -406,7 +407,7 @@ class Seq2Seq(nn.Cell):
         for t in range(1, trg_len):
             output, hidden, _ = self.decoder(inputs, hidden, encoder_outputs, mask)
             outputs.append(output)
-            top1 = ops.argmax(output, axis=1).astype(mindspore.int32)
+            top1 = self.argmax(output)
             if self.training:
                 random_values = self.uniform((trg.shape[1],))
                 teacher_force = random_values < self.teacher_forcing_ratio
@@ -500,12 +501,13 @@ def prepare_source(sentence: str | list[str], de_vocab: Vocab, max_len: int) -> 
 
 def translate_sentence(sentence: str | list[str], de_vocab: Vocab, en_vocab: Vocab, model: Seq2Seq, max_len: int = 32) -> list[str]:
     model.set_train(False)
+    argmax = ops.Argmax(axis=1, output_type=mindspore.int32)
     _, src_indexes, src_len = prepare_source(sentence, de_vocab, max_len)
     src = Tensor(src_indexes, mindspore.int32).expand_dims(1)
     src_len_tensor = Tensor([src_len], mindspore.int32)
     trg = Tensor([en_vocab.bos_idx], mindspore.int32).expand_dims(1)
     outputs = model(src, src_len_tensor, trg, max_len)
-    trg_indexes = [int(ops.argmax(step, axis=1).asnumpy()[0]) for step in outputs]
+    trg_indexes = [int(argmax(step).asnumpy()[0]) for step in outputs]
     return ids_to_tokens(trg_indexes, en_vocab)
 
 
@@ -523,12 +525,13 @@ def translate_with_attention(
     encoder_outputs, hidden = model.encoder(src, src_len_tensor)
     mask = model.create_mask(src)
     inputs = Tensor([en_vocab.bos_idx], mindspore.int32)
+    argmax = ops.Argmax(axis=1, output_type=mindspore.int32)
 
     trg_indexes: list[int] = []
     attentions: list[np.ndarray] = []
     for _ in range(max_len - 1):
         output, hidden, attention = model.decoder(inputs, hidden, encoder_outputs, mask)
-        top1 = int(ops.argmax(output, axis=1).asnumpy()[0])
+        top1 = int(argmax(output).asnumpy()[0])
         trg_indexes.append(top1)
         attentions.append(attention.asnumpy()[0][:src_len])
         inputs = Tensor([top1], mindspore.int32)
