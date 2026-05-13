@@ -59,6 +59,8 @@ def tokenize(text: str) -> list[str]:
 
 
 def find_dataset_root(search_root: Path) -> Path | None:
+    if not search_root.exists():
+        return None
     for de_file in search_root.rglob("train.de"):
         root = de_file.parent.parent
         if (
@@ -71,16 +73,47 @@ def find_dataset_root(search_root: Path) -> Path | None:
     return None
 
 
+def extract_existing_zip(search_root: Path) -> None:
+    """Extract an existing Multi30K zip when download skipped because it exists."""
+    zip_candidates = [search_root / "Multi30K.zip"]
+    zip_candidates.extend(sorted(search_root.glob("*.zip")))
+    seen: set[Path] = set()
+
+    for zip_path in zip_candidates:
+        zip_path = zip_path.resolve()
+        if zip_path in seen or not zip_path.exists():
+            continue
+        seen.add(zip_path)
+        try:
+            print(f"Extracting existing dataset archive: {zip_path}")
+            with zipfile.ZipFile(zip_path) as zf:
+                zf.extractall(search_root)
+        except zipfile.BadZipFile:
+            print(f"Skip invalid zip archive: {zip_path}")
+
+
 def ensure_dataset(data_dir: Path) -> Path:
     expected = data_dir / "train" / "train.de"
     if expected.exists():
         return data_dir
 
     data_dir.parent.mkdir(parents=True, exist_ok=True)
+    discovered_root = find_dataset_root(data_dir.parent)
+    if discovered_root is not None:
+        return discovered_root
+
+    extract_existing_zip(data_dir.parent)
+    if expected.exists():
+        return data_dir
+
+    discovered_root = find_dataset_root(data_dir.parent)
+    if discovered_root is not None:
+        return discovered_root
+
     try:
         from download import download
 
-        download(DATA_URL, str(data_dir.parent), kind="zip", replace=False)
+        download(DATA_URL, str(data_dir.parent), kind="zip", replace=True)
     except Exception as exc:
         print(f"download package failed, falling back to urllib: {exc}")
         zip_path = data_dir.parent / "Multi30K.zip"
@@ -88,6 +121,10 @@ def ensure_dataset(data_dir: Path) -> Path:
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(data_dir.parent)
 
+    if expected.exists():
+        return data_dir
+
+    extract_existing_zip(data_dir.parent)
     if expected.exists():
         return data_dir
 
