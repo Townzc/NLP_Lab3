@@ -1,0 +1,8 @@
+download
+tqdm
+nltk
+matplotlib
+numpy
+
+# MindSpore 2.2 is provided by the Huawei Cloud ModelArts public image.
+# Do not pip install mindspore on Ascend unless the platform guide asks for it.

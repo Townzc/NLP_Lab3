@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Office temporary lock files
+~$*.docx
+
+# Downloaded data and generated training artifacts
+datasets/
+Multi30K.zip
+*.ckpt
+outputs/
+
+# Local environments
+.env
+.venv/
+venv/
